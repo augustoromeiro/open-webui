@@ -820,7 +820,7 @@ async def commit_session_after_request(request: Request, call_next):
 @app.middleware("http")
 async def check_url(request: Request, call_next):
     if len(app.state.MODELS) == 0:
-        if request.headers.get("Authorization"):
+        if request and request.headers.get("Authorization"):
             user = get_current_user(
                 request,
                 get_http_authorization_cred(request.headers.get("Authorization")),
