@@ -29,7 +29,7 @@ async def get_models(id: Optional[str] = None, user=Depends(get_verified_user)):
                 detail=ERROR_MESSAGES.NOT_FOUND,
             )
     else:
-        return Models.get_all_models()
+        return Models.get_all_models_by_user(user)
 
 
 ############################

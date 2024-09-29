@@ -19,8 +19,8 @@ from open_webui.config import (
     MODEL_FILTER_LIST,
     OLLAMA_BASE_URLS,
     UPLOAD_DIR,
-    AppConfig,
 )
+from open_webui.persistent import AppConfig
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile

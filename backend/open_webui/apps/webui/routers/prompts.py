@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get("/", response_model=list[PromptModel])
 async def get_prompts(user=Depends(get_verified_user)):
-    return Prompts.get_prompts()
+    return Prompts.get_prompts(user)
 
 
 ############################

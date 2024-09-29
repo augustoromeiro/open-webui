@@ -137,7 +137,7 @@
 	};
 
 	onMount(async () => {
-		if ($user.role === 'admin') {
+		if (['admin', 'owner'].includes($user.role)) {
 			await Promise.all([
 				(async () => {
 					OLLAMA_BASE_URLS = await getOllamaUrls(localStorage.token);
@@ -181,18 +181,20 @@
 		{#if ENABLE_OPENAI_API !== null && ENABLE_OLLAMA_API !== null}
 			<div class=" space-y-3">
 				<div class="mt-2 space-y-2 pr-1.5">
-					<div class="flex justify-between items-center text-sm">
-						<div class="  font-medium">{$i18n.t('OpenAI API')}</div>
+					{#if $user.role === 'owner'}
+						<div class="flex justify-between items-center text-sm">
+							<div class="  font-medium">{$i18n.t('OpenAI API')}</div>
 
-						<div class="mt-1">
-							<Switch
-								bind:state={ENABLE_OPENAI_API}
-								on:change={async () => {
-									updateOpenAIConfig(localStorage.token, ENABLE_OPENAI_API);
-								}}
-							/>
+							<div class="mt-1">
+								<Switch
+									bind:state={ENABLE_OPENAI_API}
+									on:change={async () => {
+										updateOpenAIConfig(localStorage.token, ENABLE_OPENAI_API);
+									}}
+								/>
+							</div>
 						</div>
-					</div>
+					{/if}
 
 					{#if ENABLE_OPENAI_API}
 						<div class="flex flex-col gap-1">
@@ -317,6 +319,7 @@
 
 			<hr class=" dark:border-gray-850" />
 
+			{#if $user.role === 'owner'}
 			<div class="pr-1.5 space-y-2">
 				<div class="flex justify-between items-center text-sm">
 					<div class="  font-medium">{$i18n.t('Ollama API')}</div>
@@ -428,6 +431,7 @@
 					</div>
 				{/if}
 			</div>
+			{/if}
 		{:else}
 			<div class="flex h-full justify-center">
 				<div class="my-auto">

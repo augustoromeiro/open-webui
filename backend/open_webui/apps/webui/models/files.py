@@ -86,9 +86,9 @@ class FilesTable:
             except Exception:
                 return None
 
-    def get_files(self) -> list[FileModel]:
+    def get_files(self,user) -> list[FileModel]:
         with get_db() as db:
-            return [FileModel.model_validate(file) for file in db.query(File).all()]
+            return [FileModel.model_validate(file) for file in db.query(File).where(File.user_id == user.id)]
 
     def get_files_by_user_id(self, user_id: str) -> list[FileModel]:
         with get_db() as db:

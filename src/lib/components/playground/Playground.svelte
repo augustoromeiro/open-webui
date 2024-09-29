@@ -212,7 +212,7 @@
 	};
 
 	onMount(async () => {
-		if ($user?.role !== 'admin') {
+		if (!['admin', 'owner'].includes($user?.role)) {
 			await goto('/');
 		}
 

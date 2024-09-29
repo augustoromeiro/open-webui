@@ -4,13 +4,11 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Generic, Optional, TypeVar
+from typing import Optional
 from urllib.parse import urlparse
 
 import chromadb
 import requests
-import yaml
-from open_webui.apps.webui.internal.db import Base, get_db
 from open_webui.env import (
     OPEN_WEBUI_DIR,
     DATA_DIR,
@@ -22,7 +20,8 @@ from open_webui.env import (
     log,
 )
 from pydantic import BaseModel
-from sqlalchemy import JSON, Column, DateTime, Integer, func
+
+from open_webui.persistent import PersistentConfig
 
 
 class EndpointFilter(logging.Filter):
@@ -32,6 +31,7 @@ class EndpointFilter(logging.Filter):
 
 # Filter out /endpoint
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
 
 ####################################
 # Config helpers
@@ -57,207 +57,6 @@ def run_migrations():
 
 
 run_migrations()
-
-
-class Config(Base):
-    __tablename__ = "config"
-
-    id = Column(Integer, primary_key=True)
-    data = Column(JSON, nullable=False)
-    version = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
-
-
-def load_json_config():
-    with open(f"{DATA_DIR}/config.json", "r") as file:
-        return json.load(file)
-
-
-def save_to_db(data):
-    with get_db() as db:
-        existing_config = db.query(Config).first()
-        if not existing_config:
-            new_config = Config(data=data, version=0)
-            db.add(new_config)
-        else:
-            existing_config.data = data
-            existing_config.updated_at = datetime.now()
-            db.add(existing_config)
-        db.commit()
-
-
-def reset_config():
-    with get_db() as db:
-        db.query(Config).delete()
-        db.commit()
-
-
-# When initializing, check if config.json exists and migrate it to the database
-if os.path.exists(f"{DATA_DIR}/config.json"):
-    data = load_json_config()
-    save_to_db(data)
-    os.rename(f"{DATA_DIR}/config.json", f"{DATA_DIR}/old_config.json")
-
-DEFAULT_CONFIG = {
-    "version": 0,
-    "ui": {
-        "default_locale": "",
-        "prompt_suggestions": [
-            {
-                "title": [
-                    "Help me study",
-                    "vocabulary for a college entrance exam",
-                ],
-                "content": "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the correct option.",
-            },
-            {
-                "title": [
-                    "Give me ideas",
-                    "for what to do with my kids' art",
-                ],
-                "content": "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's also so much clutter.",
-            },
-            {
-                "title": ["Tell me a fun fact", "about the Roman Empire"],
-                "content": "Tell me a random fun fact about the Roman Empire",
-            },
-            {
-                "title": [
-                    "Show me a code snippet",
-                    "of a website's sticky header",
-                ],
-                "content": "Show me a code snippet of a website's sticky header in CSS and JavaScript.",
-            },
-            {
-                "title": [
-                    "Explain options trading",
-                    "if I'm familiar with buying and selling stocks",
-                ],
-                "content": "Explain options trading in simple terms if I'm familiar with buying and selling stocks.",
-            },
-            {
-                "title": ["Overcome procrastination", "give me tips"],
-                "content": "Could you start by asking me about instances when I procrastinate the most and then give me some suggestions to overcome it?",
-            },
-            {
-                "title": [
-                    "Grammar check",
-                    "rewrite it for better readability ",
-                ],
-                "content": 'Check the following sentence for grammar and clarity: "[sentence]". Rewrite it for better readability while maintaining its original meaning.',
-            },
-        ],
-    },
-}
-
-
-def get_config():
-    with get_db() as db:
-        config_entry = db.query(Config).order_by(Config.id.desc()).first()
-        return config_entry.data if config_entry else DEFAULT_CONFIG
-
-
-CONFIG_DATA = get_config()
-
-
-def get_config_value(config_path: str):
-    path_parts = config_path.split(".")
-    cur_config = CONFIG_DATA
-    for key in path_parts:
-        if key in cur_config:
-            cur_config = cur_config[key]
-        else:
-            return None
-    return cur_config
-
-
-PERSISTENT_CONFIG_REGISTRY = []
-
-
-def save_config(config):
-    global CONFIG_DATA
-    global PERSISTENT_CONFIG_REGISTRY
-    try:
-        save_to_db(config)
-        CONFIG_DATA = config
-
-        # Trigger updates on all registered PersistentConfig entries
-        for config_item in PERSISTENT_CONFIG_REGISTRY:
-            config_item.update()
-    except Exception as e:
-        log.exception(e)
-        return False
-    return True
-
-
-T = TypeVar("T")
-
-
-class PersistentConfig(Generic[T]):
-    def __init__(self, env_name: str, config_path: str, env_value: T):
-        self.env_name = env_name
-        self.config_path = config_path
-        self.env_value = env_value
-        self.config_value = get_config_value(config_path)
-        if self.config_value is not None:
-            log.info(f"'{env_name}' loaded from the latest database entry")
-            self.value = self.config_value
-        else:
-            self.value = env_value
-
-        PERSISTENT_CONFIG_REGISTRY.append(self)
-
-    def __str__(self):
-        return str(self.value)
-
-    @property
-    def __dict__(self):
-        raise TypeError(
-            "PersistentConfig object cannot be converted to dict, use config_get or .value instead."
-        )
-
-    def __getattribute__(self, item):
-        if item == "__dict__":
-            raise TypeError(
-                "PersistentConfig object cannot be converted to dict, use config_get or .value instead."
-            )
-        return super().__getattribute__(item)
-
-    def update(self):
-        new_value = get_config_value(self.config_path)
-        if new_value is not None:
-            self.value = new_value
-            log.info(f"Updated {self.env_name} to new value {self.value}")
-
-    def save(self):
-        log.info(f"Saving '{self.env_name}' to the database")
-        path_parts = self.config_path.split(".")
-        sub_config = CONFIG_DATA
-        for key in path_parts[:-1]:
-            if key not in sub_config:
-                sub_config[key] = {}
-            sub_config = sub_config[key]
-        sub_config[path_parts[-1]] = self.value
-        save_to_db(CONFIG_DATA)
-        self.config_value = self.value
-
-
-class AppConfig:
-    _state: dict[str, PersistentConfig]
-
-    def __init__(self):
-        super().__setattr__("_state", {})
-
-    def __setattr__(self, key, value):
-        if isinstance(value, PersistentConfig):
-            self._state[key] = value
-        else:
-            self._state[key].value = value
-            self._state[key].save()
-
-    def __getattr__(self, key):
-        return self._state[key].value
 
 
 ####################################
@@ -407,9 +206,9 @@ def load_oauth_providers():
         }
 
     if (
-        MICROSOFT_CLIENT_ID.value
-        and MICROSOFT_CLIENT_SECRET.value
-        and MICROSOFT_CLIENT_TENANT_ID.value
+            MICROSOFT_CLIENT_ID.value
+            and MICROSOFT_CLIENT_SECRET.value
+            and MICROSOFT_CLIENT_TENANT_ID.value
     ):
         OAUTH_PROVIDERS["microsoft"] = {
             "client_id": MICROSOFT_CLIENT_ID.value,
@@ -420,9 +219,9 @@ def load_oauth_providers():
         }
 
     if (
-        OAUTH_CLIENT_ID.value
-        and OAUTH_CLIENT_SECRET.value
-        and OPENID_PROVIDER_URL.value
+            OAUTH_CLIENT_ID.value
+            and OAUTH_CLIENT_SECRET.value
+            and OPENID_PROVIDER_URL.value
     ):
         OAUTH_PROVIDERS["oidc"] = {
             "client_id": OAUTH_CLIENT_ID.value,
@@ -461,7 +260,6 @@ if frontend_splash.exists():
         logging.error(f"An error occurred: {e}")
 else:
     logging.warning(f"Frontend splash not found at {frontend_splash}")
-
 
 ####################################
 # CUSTOM_NAME
@@ -505,14 +303,12 @@ if CUSTOM_NAME:
         log.exception(e)
         pass
 
-
 ####################################
 # File Upload DIR
 ####################################
 
 UPLOAD_DIR = f"{DATA_DIR}/uploads"
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
-
 
 ####################################
 # Cache DIR
@@ -521,7 +317,6 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 CACHE_DIR = f"{DATA_DIR}/cache"
 Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
-
 ####################################
 # Docs DIR
 ####################################
@@ -529,14 +324,12 @@ Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
 DOCS_DIR = os.getenv("DOCS_DIR", f"{DATA_DIR}/docs")
 Path(DOCS_DIR).mkdir(parents=True, exist_ok=True)
 
-
 ####################################
 # Tools DIR
 ####################################
 
 TOOLS_DIR = os.getenv("TOOLS_DIR", f"{DATA_DIR}/tools")
 Path(TOOLS_DIR).mkdir(parents=True, exist_ok=True)
-
 
 ####################################
 # Functions DIR
@@ -571,7 +364,6 @@ else:
     except Exception:
         AIOHTTP_CLIENT_TIMEOUT = 300
 
-
 K8S_FLAG = os.environ.get("K8S_FLAG", "")
 USE_OLLAMA_DOCKER = os.environ.get("USE_OLLAMA_DOCKER", "false")
 
@@ -593,7 +385,6 @@ if ENV == "prod":
     elif K8S_FLAG:
         OLLAMA_BASE_URL = "http://ollama-service.open-webui.svc.cluster.local:11434"
 
-
 OLLAMA_BASE_URLS = os.environ.get("OLLAMA_BASE_URLS", "")
 OLLAMA_BASE_URLS = OLLAMA_BASE_URLS if OLLAMA_BASE_URLS != "" else OLLAMA_BASE_URL
 
@@ -613,10 +404,8 @@ ENABLE_OPENAI_API = PersistentConfig(
     os.environ.get("ENABLE_OPENAI_API", "True").lower() == "true",
 )
 
-
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_API_BASE_URL = os.environ.get("OPENAI_API_BASE_URL", "")
-
 
 if OPENAI_API_BASE_URL == "":
     OPENAI_API_BASE_URL = "https://api.openai.com/v1"
@@ -724,15 +513,15 @@ DEFAULT_USER_ROLE = PersistentConfig(
 )
 
 USER_PERMISSIONS_CHAT_DELETION = (
-    os.environ.get("USER_PERMISSIONS_CHAT_DELETION", "True").lower() == "true"
+        os.environ.get("USER_PERMISSIONS_CHAT_DELETION", "True").lower() == "true"
 )
 
 USER_PERMISSIONS_CHAT_EDITING = (
-    os.environ.get("USER_PERMISSIONS_CHAT_EDITING", "True").lower() == "true"
+        os.environ.get("USER_PERMISSIONS_CHAT_EDITING", "True").lower() == "true"
 )
 
 USER_PERMISSIONS_CHAT_TEMPORARY = (
-    os.environ.get("USER_PERMISSIONS_CHAT_TEMPORARY", "True").lower() == "true"
+        os.environ.get("USER_PERMISSIONS_CHAT_TEMPORARY", "True").lower() == "true"
 )
 
 USER_PERMISSIONS = PersistentConfig(
@@ -766,7 +555,7 @@ WEBHOOK_URL = PersistentConfig(
 ENABLE_ADMIN_EXPORT = os.environ.get("ENABLE_ADMIN_EXPORT", "True").lower() == "true"
 
 ENABLE_ADMIN_CHAT_ACCESS = (
-    os.environ.get("ENABLE_ADMIN_CHAT_ACCESS", "True").lower() == "true"
+        os.environ.get("ENABLE_ADMIN_CHAT_ACCESS", "True").lower() == "true"
 )
 
 ENABLE_COMMUNITY_SHARING = PersistentConfig(
@@ -835,7 +624,6 @@ except Exception as e:
 
 WEBUI_BANNERS = PersistentConfig("WEBUI_BANNERS", "ui.banners", banners)
 
-
 SHOW_ADMIN_DETAILS = PersistentConfig(
     "SHOW_ADMIN_DETAILS",
     "auth.admin.show",
@@ -847,7 +635,6 @@ ADMIN_EMAIL = PersistentConfig(
     "auth.admin.email",
     os.environ.get("ADMIN_EMAIL", None),
 )
-
 
 ####################################
 # TASKS
@@ -878,20 +665,17 @@ ENABLE_SEARCH_QUERY = PersistentConfig(
     os.environ.get("ENABLE_SEARCH_QUERY", "True").lower() == "true",
 )
 
-
 SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
     "SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE",
     "task.search.prompt_template",
     os.environ.get("SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE", ""),
 )
 
-
 TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE = PersistentConfig(
     "TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE",
     "task.tools.prompt_template",
     os.environ.get("TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE", ""),
 )
-
 
 ####################################
 # Vector Database
@@ -998,11 +782,11 @@ RAG_EMBEDDING_MODEL = PersistentConfig(
 log.info(f"Embedding model set: {RAG_EMBEDDING_MODEL.value}")
 
 RAG_EMBEDDING_MODEL_AUTO_UPDATE = (
-    os.environ.get("RAG_EMBEDDING_MODEL_AUTO_UPDATE", "").lower() == "true"
+        os.environ.get("RAG_EMBEDDING_MODEL_AUTO_UPDATE", "").lower() == "true"
 )
 
 RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = (
-    os.environ.get("RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE", "").lower() == "true"
+        os.environ.get("RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE", "").lower() == "true"
 )
 
 RAG_EMBEDDING_OPENAI_BATCH_SIZE = PersistentConfig(
@@ -1020,11 +804,11 @@ if RAG_RERANKING_MODEL.value != "":
     log.info(f"Reranking model set: {RAG_RERANKING_MODEL.value}")
 
 RAG_RERANKING_MODEL_AUTO_UPDATE = (
-    os.environ.get("RAG_RERANKING_MODEL_AUTO_UPDATE", "").lower() == "true"
+        os.environ.get("RAG_RERANKING_MODEL_AUTO_UPDATE", "").lower() == "true"
 )
 
 RAG_RERANKING_MODEL_TRUST_REMOTE_CODE = (
-    os.environ.get("RAG_RERANKING_MODEL_TRUST_REMOTE_CODE", "").lower() == "true"
+        os.environ.get("RAG_RERANKING_MODEL_TRUST_REMOTE_CODE", "").lower() == "true"
 )
 
 CHUNK_SIZE = PersistentConfig(
@@ -1074,7 +858,7 @@ RAG_OPENAI_API_KEY = PersistentConfig(
 )
 
 ENABLE_RAG_LOCAL_WEB_FETCH = (
-    os.getenv("ENABLE_RAG_LOCAL_WEB_FETCH", "False").lower() == "true"
+        os.getenv("ENABLE_RAG_LOCAL_WEB_FETCH", "False").lower() == "true"
 )
 
 YOUTUBE_LOADER_LANGUAGE = PersistentConfig(
@@ -1082,7 +866,6 @@ YOUTUBE_LOADER_LANGUAGE = PersistentConfig(
     "rag.youtube_loader_language",
     os.getenv("YOUTUBE_LOADER_LANGUAGE", "en").split(","),
 )
-
 
 ENABLE_RAG_WEB_SEARCH = PersistentConfig(
     "ENABLE_RAG_WEB_SEARCH",
@@ -1186,7 +969,6 @@ RAG_WEB_SEARCH_CONCURRENT_REQUESTS = PersistentConfig(
     int(os.getenv("RAG_WEB_SEARCH_CONCURRENT_REQUESTS", "10")),
 )
 
-
 ####################################
 # Transcribe
 ####################################
@@ -1194,9 +976,8 @@ RAG_WEB_SEARCH_CONCURRENT_REQUESTS = PersistentConfig(
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", f"{CACHE_DIR}/whisper/models")
 WHISPER_MODEL_AUTO_UPDATE = (
-    os.environ.get("WHISPER_MODEL_AUTO_UPDATE", "").lower() == "true"
+        os.environ.get("WHISPER_MODEL_AUTO_UPDATE", "").lower() == "true"
 )
-
 
 ####################################
 # Images
@@ -1233,7 +1014,6 @@ AUTOMATIC1111_CFG_SCALE = PersistentConfig(
         else None
     ),
 )
-
 
 AUTOMATIC1111_SAMPLER = PersistentConfig(
     "AUTOMATIC1111_SAMPLERE",
@@ -1371,7 +1151,6 @@ COMFYUI_DEFAULT_WORKFLOW = """
 }
 """
 
-
 COMFYUI_WORKFLOW = PersistentConfig(
     "COMFYUI_WORKFLOW",
     "image_generation.comfyui.workflow",
@@ -1459,7 +1238,6 @@ AUDIO_TTS_ENGINE = PersistentConfig(
     "audio.tts.engine",
     os.getenv("AUDIO_TTS_ENGINE", ""),
 )
-
 
 AUDIO_TTS_MODEL = PersistentConfig(
     "AUDIO_TTS_MODEL",

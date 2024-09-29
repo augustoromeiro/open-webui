@@ -26,9 +26,8 @@ from open_webui.config import (
     WHISPER_MODEL,
     WHISPER_MODEL_AUTO_UPDATE,
     WHISPER_MODEL_DIR,
-    AppConfig,
 )
-
+from open_webui.persistent import AppConfig
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS, DEVICE_TYPE
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status

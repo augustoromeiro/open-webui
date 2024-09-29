@@ -63,7 +63,7 @@
 	onMount(async () => {
 		if ($user === undefined) {
 			await goto('/auth');
-		} else if (['user', 'admin'].includes($user.role)) {
+		} else if (['user', 'admin', 'owner'].includes($user.role)) {
 			try {
 				// Check if IndexedDB exists
 				DB = await openDB('Chats', 1);
@@ -190,7 +190,7 @@
 				}
 			});
 
-			if ($user.role === 'admin') {
+			if ($user.role === 'owner') {
 				showChangelog.set(localStorage.version !== $config.version);
 			}
 
@@ -199,7 +199,7 @@
 			}
 
 			// Check for version updates
-			if ($user.role === 'admin') {
+			if ($user.role === 'owner') {
 				// Check if the user has dismissed the update toast in the last 24 hours
 				if (localStorage.dismissedUpdateToast) {
 					const dismissedUpdateToast = new Date(Number(localStorage.dismissedUpdateToast));
@@ -242,7 +242,7 @@
 		class=" text-gray-700 dark:text-gray-100 bg-white dark:bg-gray-900 h-screen max-h-[100dvh] overflow-auto flex flex-row"
 	>
 		{#if loaded}
-			{#if !['user', 'admin'].includes($user.role)}
+			{#if !['user', 'admin', 'owner'].includes($user.role)}
 				<AccountPending />
 			{:else if localDBChats.length > 0}
 				<div class="fixed w-full h-full flex z-50">

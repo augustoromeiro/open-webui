@@ -40,8 +40,8 @@ from open_webui.config import (
     WEBHOOK_URL,
     WEBUI_AUTH,
     WEBUI_BANNERS,
-    AppConfig,
 )
+from open_webui.persistent import AppConfig
 from open_webui.env import (
     WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
     WEBUI_AUTH_TRUSTED_NAME_HEADER,

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from open_webui.utils.utils import get_admin_user, get_verified_user
 
 
-from open_webui.config import get_config, save_config
+from open_webui.persistent import get_config, save_config
 
 router = APIRouter()
 
@@ -20,8 +20,8 @@ class ImportConfigForm(BaseModel):
 
 @router.post("/import", response_model=dict)
 async def import_config(form_data: ImportConfigForm, user=Depends(get_admin_user)):
-    save_config(form_data.config)
-    return get_config()
+    save_config(form_data.config, user)
+    return get_config(user)
 
 
 ############################
@@ -31,7 +31,7 @@ async def import_config(form_data: ImportConfigForm, user=Depends(get_admin_user
 
 @router.get("/export", response_model=dict)
 async def export_config(user=Depends(get_admin_user)):
-    return get_config()
+    return get_config(user)
 
 
 class SetDefaultModelsForm(BaseModel):

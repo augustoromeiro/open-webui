@@ -32,8 +32,8 @@ from open_webui.config import (
     IMAGE_STEPS,
     IMAGES_OPENAI_API_BASE_URL,
     IMAGES_OPENAI_API_KEY,
-    AppConfig,
 )
+from open_webui.persistent import AppConfig
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from fastapi import Depends, FastAPI, HTTPException, Request

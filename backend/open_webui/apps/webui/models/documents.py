@@ -99,10 +99,10 @@ class DocumentsTable:
         except Exception:
             return None
 
-    def get_docs(self) -> list[DocumentModel]:
+    def get_docs(self,user) -> list[DocumentModel]:
         with get_db() as db:
             return [
-                DocumentModel.model_validate(doc) for doc in db.query(Document).all()
+                DocumentModel.model_validate(doc) for doc in db.query(Document).where(Document.user_id == user.id)
             ]
 
     def update_doc_by_name(

@@ -152,10 +152,10 @@ class UsersTable:
         with get_db() as db:
             return db.query(User).count()
 
-    def get_first_user(self) -> UserModel:
+    def get_first_owner(self) -> UserModel:
         try:
             with get_db() as db:
-                user = db.query(User).order_by(User.created_at).first()
+                user = db.query(User).order_by(User.created_at).where(User.role == "owner").first()
                 return UserModel.model_validate(user)
         except Exception:
             return None

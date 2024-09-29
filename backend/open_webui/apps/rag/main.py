@@ -87,8 +87,8 @@ from open_webui.config import (
     TIKA_SERVER_URL,
     UPLOAD_DIR,
     YOUTUBE_LOADER_LANGUAGE,
-    AppConfig,
 )
+from open_webui.persistent import AppConfig
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS, DEVICE_TYPE, DOCKER
 from open_webui.utils.misc import (

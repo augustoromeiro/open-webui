@@ -88,7 +88,7 @@
 				<div class=" self-center font-medium">{$i18n.t('Archived Chats')}</div>
 			</button>
 
-			{#if role === 'admin'}
+			{#if ['admin', 'owner'].includes(role)}
 				<button
 					class="flex rounded-md py-2 px-3 w-full hover:bg-gray-50 dark:hover:bg-gray-800 transition"
 					on:click={() => {
@@ -182,34 +182,36 @@
 				<div class=" self-center font-medium">{$i18n.t('Sign Out')}</div>
 			</button>
 
-			{#if $activeUserCount}
-				<hr class=" dark:border-gray-800 my-1.5 p-0" />
+			{#if role === 'owner'}
+				{#if $activeUserCount}
+					<hr class=" dark:border-gray-800 my-1.5 p-0" />
 
-				<Tooltip
-					content={$USAGE_POOL && $USAGE_POOL.length > 0
-						? `${$i18n.t('Running')}: ${$USAGE_POOL.join(', ')} ✨`
-						: ''}
-				>
-					<div class="flex rounded-md py-1.5 px-3 text-xs gap-2.5 items-center">
-						<div class=" flex items-center">
-							<span class="relative flex size-2">
-								<span
-									class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
-								/>
-								<span class="relative inline-flex rounded-full size-2 bg-green-500" />
-							</span>
-						</div>
+					<Tooltip
+						content={$USAGE_POOL && $USAGE_POOL.length > 0
+							? `${$i18n.t('Running')}: ${$USAGE_POOL.join(', ')} ✨`
+							: ''}
+					>
+						<div class="flex rounded-md py-1.5 px-3 text-xs gap-2.5 items-center">
+							<div class=" flex items-center">
+								<span class="relative flex size-2">
+									<span
+										class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+									/>
+									<span class="relative inline-flex rounded-full size-2 bg-green-500" />
+								</span>
+							</div>
 
-						<div class=" ">
-							<span class=" font-medium">
-								{$i18n.t('Active Users')}:
-							</span>
-							<span class=" font-semibold">
-								{$activeUserCount}
-							</span>
+							<div class=" ">
+								<span class=" font-medium">
+									{$i18n.t('Active Users')}:
+								</span>
+								<span class=" font-semibold">
+									{$activeUserCount}
+								</span>
+							</div>
 						</div>
-					</div>
-				</Tooltip>
+					</Tooltip>
+				{/if}
 			{/if}
 
 			<!-- <DropdownMenu.Item class="flex items-center px-3 py-2 text-sm  font-medium">

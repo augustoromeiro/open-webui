@@ -11,7 +11,7 @@
 	let loaded = false;
 
 	onMount(async () => {
-		if ($user?.role !== 'admin') {
+		if (!['admin', 'owner'].includes($user?.role)) {
 			await goto('/');
 		}
 		loaded = true;
@@ -79,25 +79,27 @@
 					{$i18n.t('Documents')}
 				</a>
 
-				<a
-					class="min-w-fit rounded-lg p-1.5 px-3 {$page.url.pathname.includes('/workspace/tools')
-						? 'bg-gray-50 dark:bg-gray-850'
-						: ''} transition"
-					href="/workspace/tools"
-				>
-					{$i18n.t('Tools')}
-				</a>
+				{#if ['owner'].includes($user?.role)}
+					<a
+						class="min-w-fit rounded-lg p-1.5 px-3 {$page.url.pathname.includes('/workspace/tools')
+							? 'bg-gray-50 dark:bg-gray-850'
+							: ''} transition"
+						href="/workspace/tools"
+					>
+						{$i18n.t('Tools')}
+					</a>
 
-				<a
-					class="min-w-fit rounded-lg p-1.5 px-3 {$page.url.pathname.includes(
-						'/workspace/functions'
-					)
-						? 'bg-gray-50 dark:bg-gray-850'
-						: ''} transition"
-					href="/workspace/functions"
-				>
-					{$i18n.t('Functions')}
-				</a>
+					<a
+						class="min-w-fit rounded-lg p-1.5 px-3 {$page.url.pathname.includes(
+							'/workspace/functions'
+						)
+							? 'bg-gray-50 dark:bg-gray-850'
+							: ''} transition"
+						href="/workspace/functions"
+					>
+						{$i18n.t('Functions')}
+					</a>
+				{/if}
 			</div>
 		</div>
 

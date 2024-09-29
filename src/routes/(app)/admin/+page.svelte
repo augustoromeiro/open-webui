@@ -70,7 +70,7 @@
 	};
 
 	onMount(async () => {
-		if ($user?.role !== 'admin') {
+		if (!['admin', 'owner'].includes($user?.role)) {
 			await goto('/');
 		} else {
 			users = await getUsers(localStorage.token);
@@ -258,12 +258,15 @@
 								class=" flex items-center gap-2 text-xs px-3 py-0.5 rounded-lg {user.role ===
 									'admin' && 'text-sky-600 dark:text-sky-200 bg-sky-200/30'} {user.role ===
 									'user' && 'text-green-600 dark:text-green-200 bg-green-200/30'} {user.role ===
+									'owner' && 'text-green-600 dark:text-yellow-200 bg-green-200/30'} {user.role ===
 									'pending' && 'text-gray-600 dark:text-gray-200 bg-gray-200/30'}"
 								on:click={() => {
 									if (user.role === 'user') {
 										updateRoleHandler(user.id, 'admin');
 									} else if (user.role === 'pending') {
 										updateRoleHandler(user.id, 'user');
+									} else if (user.role === 'admin') {
+										updateRoleHandler(user.id, 'owner');
 									} else {
 										updateRoleHandler(user.id, 'pending');
 									}
@@ -272,7 +275,8 @@
 								<div
 									class="w-1 h-1 rounded-full {user.role === 'admin' &&
 										'bg-sky-600 dark:bg-sky-300'} {user.role === 'user' &&
-										'bg-green-600 dark:bg-green-300'} {user.role === 'pending' &&
+										'bg-green-600 dark:bg-green-300'} {user.role === 'owner' &&
+										'bg-green-600 dark:bg-yellow-300'} {user.role === 'pending' &&
 										'bg-gray-600 dark:bg-gray-300'}"
 								/>
 								{$i18n.t(user.role)}</button
@@ -307,7 +311,7 @@
 
 						<td class="px-3 py-2 text-right">
 							<div class="flex justify-end w-full">
-								{#if $config.features.enable_admin_chat_access && user.role !== 'admin'}
+								{#if $config.features.enable_admin_chat_access && user.role !== 'owner'}
 									<Tooltip content={$i18n.t('Chats')}>
 										<button
 											class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
@@ -346,7 +350,7 @@
 									</button>
 								</Tooltip>
 
-								{#if user.role !== 'admin'}
+								{#if user.role !== 'owner'}
 									<Tooltip content={$i18n.t('Delete User')}>
 										<button
 											class="self-center w-fit text-sm px-2 py-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getAdminDetails } from '$lib/apis/auths';
+	import { getAdminDetails, getOwnerDetails } from '$lib/apis/auths';
 	import { onMount, tick, getContext } from 'svelte';
 
 	const i18n = getContext('i18n');
@@ -7,7 +7,7 @@
 	let adminDetails = null;
 
 	onMount(async () => {
-		adminDetails = await getAdminDetails(localStorage.token).catch((err) => {
+		adminDetails = await getOwnerDetails(localStorage.token).catch((err) => {
 			console.error(err);
 			return null;
 		});

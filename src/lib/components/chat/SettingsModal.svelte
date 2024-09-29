@@ -239,10 +239,10 @@
 					<div class=" self-center">{$i18n.t('Account')}</div>
 				</button>
 
-				{#if $user.role === 'admin'}
+				{#if $user.role === 'owner'}
 					<button
 						class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
-						'admin'
+						'owner'
 							? 'bg-gray-200 dark:bg-gray-800'
 							: ' hover:bg-gray-100 dark:hover:bg-gray-850'}"
 						on:click={async () => {

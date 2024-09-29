@@ -76,10 +76,10 @@ class PromptsTable:
         except Exception:
             return None
 
-    def get_prompts(self) -> list[PromptModel]:
+    def get_prompts(self,user) -> list[PromptModel]:
         with get_db() as db:
             return [
-                PromptModel.model_validate(prompt) for prompt in db.query(Prompt).all()
+                PromptModel.model_validate(prompt) for prompt in db.query(Prompt).where(Prompt.user_id == user.id)
             ]
 
     def update_prompt_by_command(

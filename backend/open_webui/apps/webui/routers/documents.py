@@ -28,7 +28,7 @@ async def get_documents(user=Depends(get_verified_user)):
                 "content": json.loads(doc.content if doc.content else "{}"),
             }
         )
-        for doc in Documents.get_docs()
+        for doc in Documents.get_docs(user)
     ]
     return docs
 

@@ -212,7 +212,7 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 
     try:
         role = (
-            "admin"
+            "owner"
             if Users.get_num_users() == 0
             else request.app.state.config.DEFAULT_USER_ROLE
         )
@@ -325,7 +325,39 @@ async def get_admin_details(request: Request, user=Depends(get_current_user)):
             if admin:
                 admin_name = admin.name
         else:
-            admin = Users.get_first_user()
+            admin = Users.get_first_owner()
+            if admin:
+                admin_email = admin.email
+                admin_name = admin.name
+
+        return {
+            "name": admin_name,
+            "email": admin_email,
+        }
+    else:
+        raise HTTPException(400, detail=ERROR_MESSAGES.ACTION_PROHIBITED)
+
+
+
+############################
+# GetOwnerDetails
+############################
+
+
+@router.get("/owner/details")
+async def get_owner_details(request: Request, user=Depends(get_current_user)):
+    if request.app.state.config.SHOW_ADMIN_DETAILS:
+        admin_email = request.app.state.config.ADMIN_EMAIL
+        admin_name = None
+
+        print(admin_email, admin_name)
+
+        if admin_email:
+            admin = Users.get_user_by_email(admin_email)
+            if admin:
+                admin_name = admin.name
+        else:
+            admin = Users.get_first_owner()
             if admin:
                 admin_email = admin.email
                 admin_name = admin.name
@@ -371,7 +403,7 @@ async def update_admin_config(
     request.app.state.config.SHOW_ADMIN_DETAILS = form_data.SHOW_ADMIN_DETAILS
     request.app.state.config.ENABLE_SIGNUP = form_data.ENABLE_SIGNUP
 
-    if form_data.DEFAULT_USER_ROLE in ["pending", "user", "admin"]:
+    if form_data.DEFAULT_USER_ROLE in ["pending", "user", "admin", "owner"]:
         request.app.state.config.DEFAULT_USER_ROLE = form_data.DEFAULT_USER_ROLE
 
     pattern = r"^(-1|0|(-?\d+(\.\d+)?)(ms|s|m|h|d|w))$"

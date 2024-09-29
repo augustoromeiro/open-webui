@@ -15,12 +15,12 @@
 	import Connections from './Settings/Connections.svelte';
 	import Documents from './Settings/Documents.svelte';
 	import WebSearch from './Settings/WebSearch.svelte';
-	import { config } from '$lib/stores';
+	import { config, user } from '$lib/stores';
 	import { getBackendConfig } from '$lib/apis';
 
 	const i18n = getContext('i18n');
 
-	let selectedTab = 'general';
+	let selectedTab = 'connections';
 
 	onMount(() => {
 		const containerElement = document.getElementById('admin-settings-tabs-container');
@@ -41,6 +41,7 @@
 		id="admin-settings-tabs-container"
 		class="tabs flex flex-row overflow-x-auto space-x-1 max-w-full lg:space-x-0 lg:space-y-1 lg:flex-col lg:flex-none lg:w-44 dark:text-gray-200 text-xs text-left scrollbar-none"
 	>
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 lg:flex-none flex text-right transition {selectedTab ===
 			'general'
@@ -66,7 +67,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('General')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'users'
@@ -90,6 +93,7 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Users')}</div>
 		</button>
+		{/if}
 
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
@@ -115,6 +119,7 @@
 			<div class=" self-center">{$i18n.t('Connections')}</div>
 		</button>
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'models'
@@ -140,7 +145,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Models')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'documents'
@@ -170,7 +177,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Documents')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'web'
@@ -194,7 +203,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Web Search')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'interface'
@@ -220,7 +231,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Interface')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'audio'
@@ -247,7 +260,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Audio')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'images'
@@ -273,7 +288,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Images')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'pipelines'
@@ -303,7 +320,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Pipelines')}</div>
 		</button>
+		{/if}
 
+		{#if $user.role === 'owner'}
 		<button
 			class="px-2.5 py-2.5 min-w-fit rounded-lg flex-1 md:flex-none flex text-right transition {selectedTab ===
 			'db'
@@ -331,7 +350,9 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Database')}</div>
 		</button>
+		{/if}
 	</div>
+
 
 	<div class="flex-1 mt-3 lg:mt-0 overflow-y-scroll">
 		{#if selectedTab === 'general'}

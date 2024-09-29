@@ -38,6 +38,8 @@
 	"Admin Panel": "Painel do Admin",
 	"Admin Settings": "Configurações do Admin",
 	"Admins have access to all tools at all times; users need tools assigned per model in the workspace.": "Os admins têm acesso a todas as ferramentas o tempo todo; os usuários precisam de ferramentas atribuídas por modelo no workspace.",
+	"owner": "owner",
+	"Owner": "Owner",
 	"Advanced Parameters": "Parâmetros Avançados",
 	"Advanced Params": "Parâmetros Avançados",
 	"all": "todos",

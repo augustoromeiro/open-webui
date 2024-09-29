@@ -487,7 +487,7 @@
 										bind:webSearchEnabled
 										bind:selectedToolIds
 										tools={$tools.reduce((a, e, i, arr) => {
-											if (availableToolIds.includes(e.id) || ($_user?.role ?? 'user') === 'admin') {
+											if (availableToolIds.includes(e.id) || ($_user?.role ?? 'user') === 'owner') {
 												a[e.id] = {
 													name: e.name,
 													description: e.meta.description,

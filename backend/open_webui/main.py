@@ -77,10 +77,9 @@ from open_webui.config import (
     WEBHOOK_URL,
     WEBUI_AUTH,
     WEBUI_NAME,
-    AppConfig,
     run_migrations,
-    reset_config,
 )
+from open_webui.persistent import AppConfig, reset_config
 from open_webui.constants import ERROR_MESSAGES, TASKS, WEBHOOK_MESSAGES
 from open_webui.env import (
     CHANGELOG,
@@ -717,8 +716,8 @@ def filter_pipeline(payload, user):
         try:
             urlIdx = filter["urlIdx"]
 
-            url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-            key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+            url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+            key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
             if key == "":
                 continue
@@ -821,9 +820,14 @@ async def commit_session_after_request(request: Request, call_next):
 @app.middleware("http")
 async def check_url(request: Request, call_next):
     if len(app.state.MODELS) == 0:
-        await get_all_models()
-    else:
-        pass
+        if request.headers.get("Authorization"):
+            user = get_current_user(
+                request,
+                get_http_authorization_cred(request.headers.get("Authorization")),
+            )
+            await get_all_models(user)
+        else:
+            await get_all_models()
 
     start_time = int(time.time())
     response = await call_next(request)
@@ -872,7 +876,7 @@ app.mount("/api/v1", webui_app)
 webui_app.state.EMBEDDING_FUNCTION = rag_app.state.EMBEDDING_FUNCTION
 
 
-async def get_all_models():
+async def get_all_models(user=None):
     # TODO: Optimize this function
     pipe_models = []
     openai_models = []
@@ -881,7 +885,7 @@ async def get_all_models():
     pipe_models = await get_pipe_models()
 
     if app.state.config.ENABLE_OPENAI_API:
-        openai_models = await get_openai_models()
+        openai_models = await get_openai_models(user)
         openai_models = openai_models["data"]
 
     if app.state.config.ENABLE_OLLAMA_API:
@@ -908,7 +912,7 @@ async def get_all_models():
         for function in Functions.get_functions_by_type("action", active_only=True)
     ]
 
-    custom_models = Models.get_all_models()
+    custom_models = Models.get_all_models(user)
     for custom_model in custom_models:
         if custom_model.base_model_id is None:
             for model in models:
@@ -1021,7 +1025,7 @@ async def get_all_models():
 
 @app.get("/api/models")
 async def get_models(user=Depends(get_verified_user)):
-    models = await get_all_models()
+    models = await get_all_models(user)
 
     # Filter out filter pipelines
     models = [
@@ -1100,8 +1104,8 @@ async def chat_completed(form_data: dict, user=Depends(get_verified_user)):
         try:
             urlIdx = filter["urlIdx"]
 
-            url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-            key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+            url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+            key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
             if key != "":
                 headers = {"Authorization": f"Bearer {key}"}
@@ -1717,7 +1721,7 @@ async def get_pipelines_list(user=Depends(get_admin_user)):
     return {
         "data": [
             {
-                "url": openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx],
+                "url": openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx],
                 "idx": urlIdx,
             }
             for urlIdx in urlIdxs
@@ -1747,8 +1751,8 @@ async def upload_pipeline(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
 
@@ -1796,8 +1800,8 @@ async def add_pipeline(form_data: AddPipelineForm, user=Depends(get_admin_user))
     try:
         urlIdx = form_data.urlIdx
 
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
         r = requests.post(
@@ -1838,8 +1842,8 @@ async def delete_pipeline(form_data: DeletePipelineForm, user=Depends(get_admin_
     try:
         urlIdx = form_data.urlIdx
 
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
         r = requests.delete(
@@ -1873,8 +1877,8 @@ async def delete_pipeline(form_data: DeletePipelineForm, user=Depends(get_admin_
 async def get_pipelines(urlIdx: Optional[int] = None, user=Depends(get_admin_user)):
     r = None
     try:
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
         r = requests.get(f"{url}/pipelines", headers=headers)
@@ -1910,8 +1914,8 @@ async def get_pipeline_valves(
 ):
     r = None
     try:
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
         r = requests.get(f"{url}/{pipeline_id}/valves", headers=headers)
@@ -1948,8 +1952,8 @@ async def get_pipeline_valves_spec(
 ):
     r = None
     try:
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
         r = requests.get(f"{url}/{pipeline_id}/valves/spec", headers=headers)
@@ -1986,8 +1990,8 @@ async def update_pipeline_valves(
 ):
     r = None
     try:
-        url = openai_app.state.config.OPENAI_API_BASE_URLS[urlIdx]
-        key = openai_app.state.config.OPENAI_API_KEYS[urlIdx]
+        url = openai_app.state.config[user.id].OPENAI_API_BASE_URLS[urlIdx]
+        key = openai_app.state.config[user.id].OPENAI_API_KEYS[urlIdx]
 
         headers = {"Authorization": f"Bearer {key}"}
         r = requests.post(

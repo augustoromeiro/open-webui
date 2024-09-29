@@ -8,6 +8,7 @@ from typing import Literal, Optional, overload
 import aiohttp
 import requests
 from open_webui.apps.webui.models.models import Models
+from open_webui.apps.webui.models.users import User
 from open_webui.config import (
     AIOHTTP_CLIENT_TIMEOUT,
     CACHE_DIR,
@@ -17,8 +18,8 @@ from open_webui.config import (
     MODEL_FILTER_LIST,
     OPENAI_API_BASE_URLS,
     OPENAI_API_KEYS,
-    AppConfig,
 )
+from open_webui.persistent import AppConfig, PersistentConfig
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import SRC_LOG_LEVELS
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -27,13 +28,15 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-
 from open_webui.utils.payload import (
     apply_model_params_to_body_openai,
     apply_model_system_prompt_to_body,
 )
 
-from open_webui.utils.utils import get_admin_user, get_verified_user
+from open_webui.utils.utils import get_admin_user, get_verified_user, get_current_user, get_http_authorization_cred
+
+from open_webui.persistent import set_empty_user, get_config as user_get_config
+
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["OPENAI"])
@@ -48,22 +51,48 @@ app.add_middleware(
 )
 
 
-app.state.config = AppConfig()
+def init_config(user=None):
+    if not hasattr(app.state, 'config'):
+        app.state.config = {}
 
-app.state.config.ENABLE_MODEL_FILTER = ENABLE_MODEL_FILTER
-app.state.config.MODEL_FILTER_LIST = MODEL_FILTER_LIST
+    user = set_empty_user(user)
 
-app.state.config.ENABLE_OPENAI_API = ENABLE_OPENAI_API
-app.state.config.OPENAI_API_BASE_URLS = OPENAI_API_BASE_URLS
-app.state.config.OPENAI_API_KEYS = OPENAI_API_KEYS
+    if not user.id in app.state.config:
+        app.state.config[user.id] = AppConfig()
+        app.state.config[user.id].user = user
 
-app.state.MODELS = {}
+    app.state.config[user.id].ENABLE_MODEL_FILTER = ENABLE_MODEL_FILTER
+    app.state.config[user.id].MODEL_FILTER_LIST = MODEL_FILTER_LIST
+
+    if user.id == '0':
+        app.state.config[user.id].ENABLE_OPENAI_API = ENABLE_OPENAI_API
+        app.state.config[user.id].OPENAI_API_BASE_URLS = OPENAI_API_BASE_URLS
+        app.state.config[user.id].OPENAI_API_KEYS = OPENAI_API_KEYS
+    else:
+        user_config = user_get_config(user)
+        app.state.config[user.id].ENABLE_OPENAI_API = ENABLE_OPENAI_API
+        app.state.config[user.id].OPENAI_API_BASE_URLS = PersistentConfig(f'OPENAI_API_BASE_URLS_{user.id}', f'openai.api_base_urls_{user.id}', user_config.get("openai").get("api_base_urls"))
+        app.state.config[user.id].OPENAI_API_KEYS = PersistentConfig(f'OPENAI_API_KEYS_{user.id}', f'openai.api_keys_{user.id}', user_config.get("openai").get("api_keys"))
+
+    if not hasattr(app.state, 'MODELS'):
+        app.state.MODELS = {}
+
+    if not user.id in app.state.MODELS:
+        app.state.MODELS[user.id] = {}
+
+    return user
 
 
 @app.middleware("http")
 async def check_url(request: Request, call_next):
-    if len(app.state.MODELS) == 0:
-        await get_all_models()
+    user= None
+    if request.headers.get("Authorization"):
+        user = get_current_user(
+            request,
+            get_http_authorization_cred(request.headers.get("Authorization")),
+        )
+    if user and len(app.state.MODELS[user.id]) == 0:
+        await get_all_models(user)
 
     response = await call_next(request)
     return response
@@ -71,7 +100,8 @@ async def check_url(request: Request, call_next):
 
 @app.get("/config")
 async def get_config(user=Depends(get_admin_user)):
-    return {"ENABLE_OPENAI_API": app.state.config.ENABLE_OPENAI_API}
+    user= init_config(user)
+    return {"ENABLE_OPENAI_API": app.state.config[user.id].ENABLE_OPENAI_API}
 
 
 class OpenAIConfigForm(BaseModel):
@@ -80,8 +110,9 @@ class OpenAIConfigForm(BaseModel):
 
 @app.post("/config/update")
 async def update_config(form_data: OpenAIConfigForm, user=Depends(get_admin_user)):
-    app.state.config.ENABLE_OPENAI_API = form_data.enable_openai_api
-    return {"ENABLE_OPENAI_API": app.state.config.ENABLE_OPENAI_API}
+    user= init_config(user)
+    app.state.config[user.id].ENABLE_OPENAI_API = form_data.enable_openai_api
+    return {"ENABLE_OPENAI_API": app.state.config[user.id].ENABLE_OPENAI_API}
 
 
 class UrlsUpdateForm(BaseModel):
@@ -94,32 +125,37 @@ class KeysUpdateForm(BaseModel):
 
 @app.get("/urls")
 async def get_openai_urls(user=Depends(get_admin_user)):
-    return {"OPENAI_API_BASE_URLS": app.state.config.OPENAI_API_BASE_URLS}
+    user= init_config(user)
+    return {"OPENAI_API_BASE_URLS": app.state.config[user.id].OPENAI_API_BASE_URLS}
 
 
 @app.post("/urls/update")
 async def update_openai_urls(form_data: UrlsUpdateForm, user=Depends(get_admin_user)):
-    await get_all_models()
-    app.state.config.OPENAI_API_BASE_URLS = form_data.urls
-    return {"OPENAI_API_BASE_URLS": app.state.config.OPENAI_API_BASE_URLS}
+    user= init_config(user)
+    await get_all_models(user)
+    app.state.config[user.id].OPENAI_API_BASE_URLS = form_data.urls
+    return {"OPENAI_API_BASE_URLS": app.state.config[user.id].OPENAI_API_BASE_URLS}
 
 
 @app.get("/keys")
 async def get_openai_keys(user=Depends(get_admin_user)):
-    return {"OPENAI_API_KEYS": app.state.config.OPENAI_API_KEYS}
+    user= init_config(user)
+    return {"OPENAI_API_KEYS": app.state.config[user.id].OPENAI_API_KEYS}
 
 
 @app.post("/keys/update")
 async def update_openai_key(form_data: KeysUpdateForm, user=Depends(get_admin_user)):
-    app.state.config.OPENAI_API_KEYS = form_data.keys
-    return {"OPENAI_API_KEYS": app.state.config.OPENAI_API_KEYS}
+    user= init_config(user)
+    app.state.config[user.id].OPENAI_API_KEYS = form_data.keys
+    return {"OPENAI_API_KEYS": app.state.config[user.id].OPENAI_API_KEYS}
 
 
 @app.post("/audio/speech")
 async def speech(request: Request, user=Depends(get_verified_user)):
+    user= init_config(user)
     idx = None
     try:
-        idx = app.state.config.OPENAI_API_BASE_URLS.index("https://api.openai.com/v1")
+        idx = app.state.config[user.id].OPENAI_API_BASE_URLS.index("https://api.openai.com/v1")
         body = await request.body()
         name = hashlib.sha256(body).hexdigest()
 
@@ -133,15 +169,15 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             return FileResponse(file_path)
 
         headers = {}
-        headers["Authorization"] = f"Bearer {app.state.config.OPENAI_API_KEYS[idx]}"
+        headers["Authorization"] = f"Bearer {app.state.config[user.id].OPENAI_API_KEYS[idx]}"
         headers["Content-Type"] = "application/json"
-        if "openrouter.ai" in app.state.config.OPENAI_API_BASE_URLS[idx]:
+        if "openrouter.ai" in app.state.config[user.id].OPENAI_API_BASE_URLS[idx]:
             headers["HTTP-Referer"] = "https://openwebui.com/"
             headers["X-Title"] = "Open WebUI"
         r = None
         try:
             r = requests.post(
-                url=f"{app.state.config.OPENAI_API_BASE_URLS[idx]}/audio/speech",
+                url=f"{app.state.config[user.id].OPENAI_API_BASE_URLS[idx]}/audio/speech",
                 data=body,
                 headers=headers,
                 stream=True,
@@ -193,8 +229,8 @@ async def fetch_url(url, key):
 
 
 async def cleanup_response(
-    response: Optional[aiohttp.ClientResponse],
-    session: Optional[aiohttp.ClientSession],
+        response: Optional[aiohttp.ClientResponse],
+        session: Optional[aiohttp.ClientSession],
 ):
     if response:
         response.close()
@@ -202,7 +238,7 @@ async def cleanup_response(
         await session.close()
 
 
-def merge_models_lists(model_lists):
+def merge_models_lists(model_lists, user):
     log.debug(f"merge_models_lists {model_lists}")
     merged_list = []
 
@@ -219,50 +255,52 @@ def merge_models_lists(model_lists):
                     }
                     for model in models
                     if "api.openai.com"
-                    not in app.state.config.OPENAI_API_BASE_URLS[idx]
-                    or not any(
-                        name in model["id"]
-                        for name in [
-                            "babbage",
-                            "dall-e",
-                            "davinci",
-                            "embedding",
-                            "tts",
-                            "whisper",
-                        ]
-                    )
+                       not in app.state.config[user.id].OPENAI_API_BASE_URLS[idx]
+                       or not any(
+                    name in model["id"]
+                    for name in [
+                        "babbage",
+                        "dall-e",
+                        "davinci",
+                        "embedding",
+                        "tts",
+                        "whisper",
+                    ]
+                )
                 ]
             )
 
     return merged_list
 
 
-def is_openai_api_disabled():
-    api_keys = app.state.config.OPENAI_API_KEYS
+def is_openai_api_disabled(user):
+    user= init_config(user)
+    api_keys = app.state.config[user.id].OPENAI_API_KEYS
     no_keys = len(api_keys) == 1 and api_keys[0] == ""
-    return no_keys or not app.state.config.ENABLE_OPENAI_API
+    return no_keys or not app.state.config[user.id].ENABLE_OPENAI_API
 
 
-async def get_all_models_raw() -> list:
-    if is_openai_api_disabled():
+async def get_all_models_raw(user) -> list:
+    user= init_config(user)
+    if is_openai_api_disabled(user):
         return []
 
     # Check if API KEYS length is same than API URLS length
-    num_urls = len(app.state.config.OPENAI_API_BASE_URLS)
-    num_keys = len(app.state.config.OPENAI_API_KEYS)
+    num_urls = len(app.state.config[user.id].OPENAI_API_BASE_URLS)
+    num_keys = len(app.state.config[user.id].OPENAI_API_KEYS)
 
     if num_keys != num_urls:
         # if there are more keys than urls, remove the extra keys
         if num_keys > num_urls:
-            new_keys = app.state.config.OPENAI_API_KEYS[:num_urls]
-            app.state.config.OPENAI_API_KEYS = new_keys
+            new_keys = app.state.config[user.id].OPENAI_API_KEYS[:num_urls]
+            app.state.config[user.id].OPENAI_API_KEYS = new_keys
         # if there are more urls than keys, add empty keys
         else:
-            app.state.config.OPENAI_API_KEYS += [""] * (num_urls - num_keys)
+            app.state.config[user.id].OPENAI_API_KEYS += [""] * (num_urls - num_keys)
 
     tasks = [
-        fetch_url(f"{url}/models", app.state.config.OPENAI_API_KEYS[idx])
-        for idx, url in enumerate(app.state.config.OPENAI_API_BASE_URLS)
+        fetch_url(f"{url}/models", app.state.config[user.id].OPENAI_API_KEYS[idx])
+        for idx, url in enumerate(app.state.config[user.id].OPENAI_API_BASE_URLS)
     ]
 
     responses = await asyncio.gather(*tasks)
@@ -272,19 +310,20 @@ async def get_all_models_raw() -> list:
 
 
 @overload
-async def get_all_models(raw: Literal[True]) -> list: ...
+async def get_all_models(user=None, raw: Literal[True] = True) -> list: ...
 
 
 @overload
-async def get_all_models(raw: Literal[False] = False) -> dict[str, list]: ...
+async def get_all_models(user=None, raw: Literal[False] = False) -> dict[str, list]: ...
 
 
-async def get_all_models(raw=False) -> dict[str, list] | list:
+async def get_all_models(user=None, raw=False) -> dict[str, list] | list:
+    user= init_config(user)
     log.info("get_all_models()")
-    if is_openai_api_disabled():
+    if is_openai_api_disabled(user):
         return [] if raw else {"data": []}
 
-    responses = await get_all_models_raw()
+    responses = await get_all_models_raw(user)
     if raw:
         return responses
 
@@ -295,10 +334,10 @@ async def get_all_models(raw=False) -> dict[str, list] | list:
             return response
         return None
 
-    models = {"data": merge_models_lists(map(extract_data, responses))}
+    models = {"data": merge_models_lists(map(extract_data, responses), user)}
 
     log.debug(f"models: {models}")
-    app.state.MODELS = {model["id"]: model for model in models["data"]}
+    app.state.MODELS[user.id] = {model["id"]: model for model in models["data"]}
 
     return models
 
@@ -306,21 +345,22 @@ async def get_all_models(raw=False) -> dict[str, list] | list:
 @app.get("/models")
 @app.get("/models/{url_idx}")
 async def get_models(url_idx: Optional[int] = None, user=Depends(get_verified_user)):
+    user= init_config(user)
     if url_idx is None:
-        models = await get_all_models()
-        if app.state.config.ENABLE_MODEL_FILTER:
+        models = await get_all_models(user)
+        if app.state.config[user.id].ENABLE_MODEL_FILTER:
             if user.role == "user":
                 models["data"] = list(
                     filter(
-                        lambda model: model["id"] in app.state.config.MODEL_FILTER_LIST,
+                        lambda model: model["id"] in app.state.config[user.id].MODEL_FILTER_LIST,
                         models["data"],
                     )
                 )
                 return models
         return models
     else:
-        url = app.state.config.OPENAI_API_BASE_URLS[url_idx]
-        key = app.state.config.OPENAI_API_KEYS[url_idx]
+        url = app.state.config[user.id].OPENAI_API_BASE_URLS[url_idx]
+        key = app.state.config[user.id].OPENAI_API_KEYS[url_idx]
 
         headers = {}
         headers["Authorization"] = f"Bearer {key}"
@@ -373,10 +413,11 @@ async def get_models(url_idx: Optional[int] = None, user=Depends(get_verified_us
 @app.post("/chat/completions")
 @app.post("/chat/completions/{url_idx}")
 async def generate_chat_completion(
-    form_data: dict,
-    url_idx: Optional[int] = None,
-    user=Depends(get_verified_user),
+        form_data: dict,
+        url_idx: Optional[int] = None,
+        user=Depends(get_verified_user),
 ):
+    user= init_config(user)
     idx = 0
     payload = {**form_data}
 
@@ -394,7 +435,7 @@ async def generate_chat_completion(
         payload = apply_model_params_to_body_openai(params, payload)
         payload = apply_model_system_prompt_to_body(params, payload, user)
 
-    model = app.state.MODELS[payload.get("model")]
+    model = app.state.MODELS[user.id][payload.get("model")]
     idx = model["urlIdx"]
 
     if "pipeline" in model and model.get("pipeline"):
@@ -405,8 +446,8 @@ async def generate_chat_completion(
             "role": user.role,
         }
 
-    url = app.state.config.OPENAI_API_BASE_URLS[idx]
-    key = app.state.config.OPENAI_API_KEYS[idx]
+    url = app.state.config[user.id].OPENAI_API_BASE_URLS[idx]
+    key = app.state.config[user.id].OPENAI_API_KEYS[idx]
 
     # Change max_completion_tokens to max_tokens (Backward compatible)
     if "api.openai.com" not in url and not payload["model"].lower().startswith("o1-"):
@@ -429,7 +470,7 @@ async def generate_chat_completion(
     headers = {}
     headers["Authorization"] = f"Bearer {key}"
     headers["Content-Type"] = "application/json"
-    if "openrouter.ai" in app.state.config.OPENAI_API_BASE_URLS[idx]:
+    if "openrouter.ai" in app.state.config[user.id].OPENAI_API_BASE_URLS[idx]:
         headers["HTTP-Referer"] = "https://openwebui.com/"
         headers["X-Title"] = "Open WebUI"
 
@@ -488,12 +529,13 @@ async def generate_chat_completion(
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
+    user= init_config(user)
     idx = 0
 
     body = await request.body()
 
-    url = app.state.config.OPENAI_API_BASE_URLS[idx]
-    key = app.state.config.OPENAI_API_KEYS[idx]
+    url = app.state.config[user.id].OPENAI_API_BASE_URLS[idx]
+    key = app.state.config[user.id].OPENAI_API_KEYS[idx]
 
     target_url = f"{url}/{path}"
 

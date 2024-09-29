@@ -134,9 +134,15 @@ class ModelsTable:
             print(e)
             return None
 
-    def get_all_models(self) -> list[ModelModel]:
+    def get_all_models(self,user=None) -> list[ModelModel]:
+        if user:
+            return self.get_all_models_by_user(user)
         with get_db() as db:
             return [ModelModel.model_validate(model) for model in db.query(Model).all()]
+
+    def get_all_models_by_user(self,user) -> list[ModelModel]:
+        with get_db() as db:
+            return [ModelModel.model_validate(model) for model in db.query(Model).where(Model.user_id == user.id)]
 
     def get_model_by_id(self, id: str) -> Optional[ModelModel]:
         try:

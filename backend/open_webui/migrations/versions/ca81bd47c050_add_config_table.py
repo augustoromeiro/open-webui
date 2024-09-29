@@ -24,6 +24,7 @@ def upgrade():
         sa.Column("id", sa.Integer, primary_key=True),
         sa.Column("data", sa.JSON(), nullable=False),
         sa.Column("version", sa.Integer, nullable=False),
+        sa.Column("user_id", sa.Integer, nullable=False),
         sa.Column(
             "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
         ),

@@ -255,7 +255,7 @@
 			</div>
 
 			{#if showAdvanced}
-				<AdvancedParams admin={$user?.role === 'admin'} bind:params />
+				<AdvancedParams admin={$user?.role === 'owner'} bind:params />
 				<hr class=" dark:border-gray-850" />
 
 				<div class=" py-1 w-full justify-between">
