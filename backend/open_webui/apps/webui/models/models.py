@@ -144,6 +144,7 @@ class ModelsTable:
         with get_db() as db:
             return [ModelModel.model_validate(model) for model in db.query(Model).where(Model.user_id == user.id)]
 
+
     def get_model_by_id(self, id: str) -> Optional[ModelModel]:
         try:
             with get_db() as db:
