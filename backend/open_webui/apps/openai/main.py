@@ -71,8 +71,9 @@ def init_config(user=None):
     else:
         user_config = user_get_config(user)
         app.state.config[user.id].ENABLE_OPENAI_API = ENABLE_OPENAI_API
-        app.state.config[user.id].OPENAI_API_BASE_URLS = PersistentConfig(f'OPENAI_API_BASE_URLS_{user.id}', f'openai.api_base_urls_{user.id}', user_config.get("openai").get("api_base_urls"))
-        app.state.config[user.id].OPENAI_API_KEYS = PersistentConfig(f'OPENAI_API_KEYS_{user.id}', f'openai.api_keys_{user.id}', user_config.get("openai").get("api_keys"))
+        if user_config and user_config.get("openai"):
+            app.state.config[user.id].OPENAI_API_BASE_URLS = PersistentConfig(f'OPENAI_API_BASE_URLS_{user.id}', f'openai.api_base_urls_{user.id}', user_config.get("openai").get("api_base_urls"))
+            app.state.config[user.id].OPENAI_API_KEYS = PersistentConfig(f'OPENAI_API_KEYS_{user.id}', f'openai.api_keys_{user.id}', user_config.get("openai").get("api_keys"))
 
     if not hasattr(app.state, 'MODELS'):
         app.state.MODELS = {}
