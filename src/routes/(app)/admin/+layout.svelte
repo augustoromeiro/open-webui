@@ -59,7 +59,9 @@
 			>
 				{#if $user.role === 'owner'}
 					<a
-						class="min-w-fit rounded-lg p-1.5 px-3 {['/admin', '/admin/'].includes($page.url.pathname)
+						class="min-w-fit rounded-lg p-1.5 px-3 {['/admin', '/admin/'].includes(
+							$page.url.pathname
+						)
 							? 'bg-gray-50 dark:bg-gray-850'
 							: ''} transition"
 						href="/admin">{$i18n.t('Dashboard')}</a
