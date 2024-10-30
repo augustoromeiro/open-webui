@@ -207,6 +207,7 @@
 												: ''} text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-none"
 											placeholder={$i18n.t('API Base URL')}
 											bind:value={url}
+											disabled={idx === 0}
 											autocomplete="off"
 										/>
 
@@ -235,8 +236,11 @@
 									</div>
 
 									<SensitiveInput
+										outerClassName={idx === 0 ? "flex flex-1 password" : 'flex flex-1'}
+										showButtonClassName={idx === 0 ? "hidden" : 'px-2 transition rounded-r-lg bg-gray-50 dark:bg-gray-850'}
 										placeholder={$i18n.t('API Key')}
 										bind:value={OPENAI_API_KEYS[idx]}
+										readOnly={idx === 0}
 									/>
 									<div class="self-center flex items-center">
 										{#if idx === 0}
